@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Maruti — Cost Dashboard</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --ground:#0b1628;      /* deep navy — family with the suite's #0f2044, darker for a screen left open */
+    --panel:#12213a;
+    --panel-2:#182b49;
+    --line:#24395c;
+    --ink:#e8eef7;
+    --muted:#8fa3bf;
+    --faint:#5d7a9e;
+    --gold:#f0b429;        /* besan / fried gold — the signature accent */
+    --gold-dim:#b8860b;
+    --clay:#d97036;
+    --green:#34d399;
+    --red:#f87171;
+    --amber:#fbbf24;
+  }
+  html,body{height:100%;}
+  body{
+    font-family:'Segoe UI',Tahoma,system-ui,sans-serif;
+    background:var(--ground);
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;   /* ledger discipline: figures align in columns */
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";}
+
+  /* ── gate ── */
+  #gate{position:fixed;inset:0;background:var(--ground);display:flex;align-items:center;justify-content:center;z-index:999;}
+  .gate-box{width:320px;text-align:center;}
+  .gate-mark{font-size:11px;letter-spacing:.28em;color:var(--gold);text-transform:uppercase;margin-bottom:10px;}
+  .gate-box h1{font-size:24px;font-weight:300;letter-spacing:-.5px;margin-bottom:26px;}
+  .gate-box input{width:100%;padding:12px 14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;color:var(--ink);font-size:15px;text-align:center;letter-spacing:.3em;outline:none;}
+  .gate-box input:focus{border-color:var(--gold);}
+  .gate-box button{width:100%;margin-top:10px;padding:12px;background:var(--gold);color:#1a1204;
+    border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;}
+  #gate-err{color:var(--red);font-size:12px;margin-top:10px;min-height:16px;}
+
+  /* ── shell ── */
+  .top{border-bottom:1px solid var(--line);padding:14px 22px;display:flex;align-items:center;
+    gap:18px;flex-wrap:wrap;background:var(--panel);position:sticky;top:0;z-index:50;}
+  .brand{font-size:15px;font-weight:700;letter-spacing:-.2px;}
+  .brand span{color:var(--gold);}
+  .top-sub{font-size:11px;color:var(--muted);letter-spacing:.06em;}
+  .spacer{flex:1;}
+  .ctl{display:flex;align-items:center;gap:7px;}
+  .ctl label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
+  .ctl input[type=date]{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    padding:6px 9px;border-radius:6px;font-size:12px;outline:none;color-scheme:dark;}
+  .btn{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:7px 13px;
+    border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;}
+  .btn:hover{border-color:var(--gold);}
+  .btn-gold{background:var(--gold);color:#1a1204;border-color:var(--gold);}
+  .chip{font-size:10px;color:var(--muted);border:1px solid var(--line);padding:4px 9px;border-radius:20px;}
+
+  .wrap{padding:22px;max-width:1240px;margin:0 auto;}
+
+  /* ── hero: the cost stack ── */
+  .hero{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 26px;margin-bottom:18px;}
+  .eyebrow{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+  .hero-figure{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px;}
+  .hero-num{font-size:52px;font-weight:200;letter-spacing:-2px;line-height:1;}
+  .hero-unit{font-size:14px;color:var(--muted);}
+  .hero-note{font-size:12px;color:var(--muted);margin-bottom:20px;}
+
+  .stack{display:flex;height:38px;border-radius:7px;overflow:hidden;background:var(--panel-2);margin-bottom:12px;}
+  .seg{position:relative;transition:opacity .15s;}
+  .seg:hover{opacity:.82;}
+  .stack-key{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:22px;}
+  .key{display:flex;align-items:center;gap:7px;font-size:12px;}
+  .dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+  .key b{font-weight:700;}
+  .key span{color:var(--muted);}
+
+  /* ledger build-up */
+  .ledger{border-top:1px solid var(--line);padding-top:4px;}
+  .lrow{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:8px 0;
+    border-bottom:1px solid rgba(36,57,92,.5);font-size:13px;}
+  .lrow.total{border-bottom:none;border-top:1px solid var(--line);margin-top:4px;padding-top:12px;
+    font-size:15px;font-weight:700;}
+  .lrow .lbl{color:var(--muted);}
+  .lrow.total .lbl{color:var(--ink);}
+  .lrow .val{font-weight:600;white-space:nowrap;}
+  .lrow .pct{color:var(--faint);font-size:11px;margin-left:8px;}
+
+  /* ── panels ── */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;}
+  .card h3{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
+    font-weight:700;margin-bottom:14px;}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;
+    border-bottom:1px solid rgba(36,57,92,.5);font-size:13px;}
+  .stat:last-child{border-bottom:none;}
+  .stat .k{color:var(--muted);}
+  .stat .v{font-weight:600;}
+  .big{font-size:30px;font-weight:200;letter-spacing:-1px;line-height:1.1;}
+  .big-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+
+  .bar{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;margin-top:7px;}
+  .bar i{display:block;height:100%;background:var(--gold);}
+
+  .empty{font-size:12px;color:var(--muted);line-height:1.7;}
+  .empty b{color:var(--ink);}
+  .todo{display:flex;gap:9px;align-items:flex-start;font-size:12px;padding:7px 0;
+    border-bottom:1px solid rgba(36,57,92,.5);line-height:1.5;}
+  .todo:last-child{border-bottom:none;}
+  .todo .mk{flex-shrink:0;width:15px;}
+  .ok{color:var(--green);}
+  .warn{color:var(--amber);}
+  .bad{color:var(--red);}
+
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+    font-weight:600;padding:5px 6px;border-bottom:1px solid var(--line);}
+  td{padding:6px;border-bottom:1px solid rgba(36,57,92,.4);}
+  tr:last-child td{border-bottom:none;}
+  .r{text-align:right;}
+
+  #status{padding:9px 22px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line);
+    background:var(--panel-2);display:none;}
+  #status.show{display:block;}
+  .foot{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;
+    color:var(--faint);line-height:1.8;}
+  @media(max-width:640px){
+    .wrap{padding:14px;} .hero{padding:18px;} .hero-num{font-size:38px;}
+    .top{padding:12px 14px;gap:10px;}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <div class="gate-mark">Maruti Namkeen</div>
+    <h1>Cost Dashboard</h1>
+    <input type="password" id="gate-pin" placeholder="passcode" autocomplete="off"/>
+    <button onclick="unlock()">Open</button>
+    <div id="gate-err"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="top">
+    <div>
+      <div class="brand">Maruti <span>Cost Dashboard</span></div>
+      <div class="top-sub" id="period-label">—</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="ctl">
+      <label>From</label><input type="date" id="d-from"/>
+      <label>To</label><input type="date" id="d-to"/>
+    </div>
+    <button class="btn" onclick="setThisMonth()">This month</button>
+    <button class="btn" onclick="setLastMonth()">Last month</button>
+    <button class="btn btn-gold" onclick="refresh()">Refresh</button>
+    <span class="chip" id="reads">0 reads</span>
+  </div>
+  <div id="status"></div>
+  <div class="wrap" id="body"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// Reads TradeTrack + Loading. Never writes. Costing joins later for yield variance.
+// ═══════════════════════════════════════════════════════════════
+var CFG_TT = {apiKey:"AIzaSyBFnB45jDGENiMNK-VL3aTLYsfwslcVSWA",authDomain:"tradetrack-bd536.firebaseapp.com",
+  projectId:"tradetrack-bd536",storageBucket:"tradetrack-bd536.firebasestorage.app",
+  messagingSenderId:"849256051421",appId:"1:849256051421:web:1d8382f9323224da552134"};
+var CFG_LD = {apiKey:"AIzaSyCiRV8C1smeo9L6DCWaZ7tUIwmomMeONKg",authDomain:"truck-loading-app-a053f.firebaseapp.com",
+  projectId:"truck-loading-app-a053f",storageBucket:"truck-loading-app-a053f.firebasestorage.app",
+  messagingSenderId:"856836961666",appId:"1:856836961666:web:dbdfe6219397fa07818b9b"};
+
+var PASSCODE = 'maruti';   // simple gate — see the note in the footer about hardening this
+
+var ttDb=null, ldDb=null, reads=0;
+var D = {};                // everything fetched for the current period
+
+// ── gate ──
+function unlock(){
+  var v=document.getElementById('gate-pin').value;
+  if(v!==PASSCODE){document.getElementById('gate-err').textContent='Wrong passcode.';return;}
+  sessionStorage.setItem('mcd','1'); start();
+}
+document.getElementById('gate-pin').addEventListener('keydown',function(e){if(e.key==='Enter')unlock();});
+if(sessionStorage.getItem('mcd')==='1') setTimeout(start,0);
+
+function start(){
+  document.getElementById('gate').style.display='none';
+  document.getElementById('app').style.display='';
+  try{
+    ttDb = firebase.initializeApp(CFG_TT,'tt').firestore();
+    ldDb = firebase.initializeApp(CFG_LD,'ld').firestore();
+  }catch(e){ /* already initialised on a re-entry */ }
+  setThisMonth();
+}
+
+// ── dates ──
+function iso(d){return d.toISOString().slice(0,10);}
+function setThisMonth(){
+  var n=new Date();
+  document.getElementById('d-from').value=iso(new Date(n.getFullYear(),n.getMonth(),1));
+  document.getElementById('d-to').value=iso(n);
+  refresh();
+}
+function setLastMonth(){
+  var n=new Date();
+  document.getElementById('d-from').value=iso(new Date(n.getFullYear(),n.getMonth()-1,1));
+  document.getElementById('d-to').value=iso(new Date(n.getFullYear(),n.getMonth(),0));
+  refresh();
+}
+function daysInclusive(a,b){
+  var x=new Date(a),y=new Date(b);
+  if(isNaN(x)||isNaN(y))return 0;
+  return Math.floor((y-x)/86400000)+1;
+}
+function fmtD(d){
+  if(!d)return '—';
+  var p=String(d).split('-'); if(p.length!==3)return d;
+  var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return p[2]+' '+m[+p[1]-1]+' '+p[0];
+}
+function inr(n){
+  if(!isFinite(n))return '—';
+  return '₹'+Math.round(n).toLocaleString('en-IN');
+}
+function inr2(n){
+  if(!isFinite(n))return '—';
+  return '₹'+(Math.round(n*100)/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function kg(n){
+  if(!isFinite(n))return '—';
+  if(Math.abs(n)>=1000) return (n/1000).toFixed(2)+' t';
+  return Math.round(n).toLocaleString('en-IN')+' kg';
+}
+function status(msg){
+  var el=document.getElementById('status');
+  if(!msg){el.classList.remove('show');return;}
+  el.textContent=msg; el.classList.add('show');
+}
+
+// ── fetch ──
+// Date-bounded wherever the collection supports it, so a month's view doesn't pull
+// years of history. Single-field range filters only — no composite index needed.
+async function snap(db,col,field,from,to){
+  var q=db.collection(col);
+  if(field){ q=q.where(field,'>=',from).where(field,'<=',to); }
+  var s=await q.get(); reads+=s.size;
+  return s.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+}
+async function docOf(db,col,id){
+  var s=await db.collection(col).doc(id).get(); reads+=1;
+  return s.exists?s.data():null;
+}
+
+async function refresh(){
+  var from=document.getElementById('d-from').value, to=document.getElementById('d-to').value;
+  if(!from||!to){status('Pick both dates.');return;}
+  if(from>to){status('"From" is after "To".');return;}
+  document.getElementById('period-label').textContent=fmtD(from)+' → '+fmtD(to);
+  reads=0; status('Loading…');
+  try{
+    var r=await Promise.all([
+      snap(ttDb,'overheads',null),                       // small; date logic is a two-field overlap
+      snap(ttDb,'overhead_categories',null),
+      snap(ttDb,'skus',null),
+      snap(ttDb,'stock_issues','date',from,to),
+      snap(ttDb,'deliveries','deliveryDate',from,to),
+      snap(ttDb,'deliveries',null),                      // all-time, for weighted-average landed rate
+      snap(ldDb,'prod_entries','date',from,to),
+      docOf(ldDb,'config','skus'),
+      docOf(ldDb,'stock_config','contractor_payments')
+    ]);
+    D={overheads:r[0],ohCats:r[1],ttSkus:r[2],issues:r[3],deliveries:r[4],allDeliveries:r[5],
+       prod:r[6],ldSkus:(r[7]&&r[7].list)||[],payments:(r[8]&&r[8].list)||[],from:from,to:to};
+    document.getElementById('reads').textContent=reads.toLocaleString('en-IN')+' reads';
+    status(''); render();
+  }catch(e){
+    status('Could not load: '+(e&&e.message?e.message:e)+
+      '  —  check that Firestore rules allow reads on these collections.');
+  }
+}
+
+// ═══════════════ CALCULATIONS ═══════════════
+
+// kg produced — the denominator everything else divides by.
+// Prefers the weight frozen at save (wKg); falls back to the SKU's current weight.
+function computeProduction(){
+  var byId={}; D.ldSkus.forEach(function(s){byId[s.id]=s;});
+  var kgTot=0, units=0, mapped=0, unmapped=0, missing={};
+  D.prod.forEach(function(e){
+    (e.items||[]).forEach(function(it){
+      var q=parseFloat(it.qty)||0; if(!q)return;
+      units+=q;
+      var w=parseFloat(it.wKg)||0;
+      if(!w){ var sk=byId[it.skuId]; w=sk?(parseFloat(sk.weightPerUnitKg)||0):0; }
+      if(w>0){ kgTot+=q*w; mapped+=q; }
+      else { unmapped+=q; var nm=(byId[it.skuId]||{}).name||('SKU '+it.skuId); missing[nm]=(missing[nm]||0)+q; }
+    });
+  });
+  return {kg:kgTot,units:units,mapped:mapped,unmapped:unmapped,
+    coverage: units>0 ? mapped/units : 0, missing:missing, entries:D.prod.length};
+}
+
+// Weighted-average landed rate per SKU, from every delivery ever recorded.
+// Landed = material + freight, unless the supplier's rate already included freight.
+function landedRates(){
+  var acc={};
+  D.allDeliveries.forEach(function(d){
+    var q=parseFloat(d.qty)||0; if(q<=0||!d.skuId)return;
+    var rate=(d.actualRate!=null?d.actualRate:d.dealRate)||0;
+    var frt=(!d.freightIncluded&&d.freightAmount>0)?d.freightAmount:0;
+    var a=acc[d.skuId]||(acc[d.skuId]={qty:0,val:0});
+    a.qty+=q; a.val+=q*rate+frt;
+  });
+  var out={};
+  Object.keys(acc).forEach(function(k){ if(acc[k].qty>0) out[k]=acc[k].val/acc[k].qty; });
+  return out;
+}
+
+// Consumption valued at those rates, split into the layers of the cost stack.
+function computeConsumption(){
+  var rates=landedRates(), sku={};
+  D.ttSkus.forEach(function(s){sku[s.id]=s;});
+  var out={material:0,packaging:0,fuel:0,unpriced:0,unpricedQty:0,byCat:{}};
+  D.issues.forEach(function(i){
+    var q=parseFloat(i.qty)||0; if(q<=0)return;
+    var s=sku[i.skuId];
+    var cat=(s&&s.category)||'Other';
+    var r=rates[i.skuId];
+    if(r==null){ out.unpriced++; out.unpricedQty+=q; return; }
+    var v=q*r;
+    out.byCat[cat]=(out.byCat[cat]||0)+v;
+    if(cat==='Fuel') out.fuel+=v;
+    else if(cat==='Packaging Material') out.packaging+=v;
+    else out.material+=v;
+  });
+  return out;
+}
+
+// Approved overheads, apportioned by how many of their days fall inside the period.
+// A month's rent entered once as a range contributes only its overlapping share.
+function computeOverheads(){
+  var cat={}; D.ohCats.forEach(function(c){cat[c.id]=c;});
+  var topOf=function(id){ var c=cat[id]; if(!c)return '—'; return c.parent?((cat[c.parent]||{}).name||'—'):c.name; };
+  var out={labour:0,other:0,byTop:{},pending:0,pendingVal:0};
+  D.overheads.forEach(function(o){
+    if(o.approval==='pending'){ out.pending++; out.pendingVal+=(o.amount||0); return; }
+    var f=o.dateFrom, t=o.dateTo||o.dateFrom;
+    if(!f)return;
+    var total=daysInclusive(f,t); if(total<=0)return;
+    var os=(f>D.from?f:D.from), oe=(t<D.to?t:D.to);
+    var overlap=daysInclusive(os,oe); if(overlap<=0)return;
+    var share=(o.amount||0)*(overlap/total);
+    var top=topOf(o.categoryId);
+    out.byTop[top]=(out.byTop[top]||0)+share;
+    if(/daily wages/i.test(top)) out.labour+=share; else out.other+=share;
+  });
+  return out;
+}
+
+// Contractor settlements whose period overlaps this one, apportioned the same way.
+function computeContractor(){
+  var tot=0,n=0;
+  D.payments.forEach(function(p){
+    if(!p.from||!p.to)return;
+    var total=daysInclusive(p.from,p.to); if(total<=0)return;
+    var s=(p.from>D.from?p.from:D.from), e=(p.to<D.to?p.to:D.to);
+    var ov=daysInclusive(s,e); if(ov<=0)return;
+    tot+=(p.actualAmount||p.computedAmount||0)*(ov/total); n++;
+  });
+  return {amount:tot,count:n};
+}
+
+function computeFreight(){
+  var paid=0,inRate=0;
+  D.deliveries.forEach(function(d){
+    var f=parseFloat(d.freightAmount)||0; if(f<=0)return;
+    if(d.freightIncluded) inRate+=f; else paid+=f;
+  });
+  return {paid:paid,inRate:inRate};
+}
+
+// ═══════════════ RENDER ═══════════════
+function render(){
+  var P=computeProduction(), C=computeConsumption(), O=computeOverheads(),
+      K=computeContractor(), F=computeFreight();
+  var labour=O.labour+K.amount;
+  var layers=[
+    {k:'Material',  v:C.material,  c:'#f0b429'},
+    {k:'Packaging', v:C.packaging, c:'#d97036'},
+    {k:'Fuel',      v:C.fuel,      c:'#b8860b'},
+    {k:'Labour',    v:labour,      c:'#7c9cbf'},
+    {k:'Overhead',  v:O.other,     c:'#4a6b8a'}
+  ];
+  var grand=layers.reduce(function(s,l){return s+l.v;},0);
+  var perKg = P.kg>0 ? grand/P.kg : NaN;
+  var H='';
+
+  // ── hero ──
+  H+='<div class="hero"><div class="eyebrow">Cost per kilogram produced</div>';
+  if(P.kg>0&&grand>0){
+    H+='<div class="hero-figure"><div class="hero-num num">'+inr2(perKg)+'</div>'+
+       '<div class="hero-unit">per kg &nbsp;·&nbsp; '+kg(P.kg)+' produced &nbsp;·&nbsp; '+inr(grand)+' total</div></div>';
+    H+='<div class="hero-note">Material, packaging, fuel, labour and overhead. '+
+       'Excludes depreciation of anything not entered as an overhead, and excludes loan principal.'+
+       (P.coverage<0.999?' <span class="warn">Weight mapping is '+Math.round(P.coverage*100)+
+       '% complete, so the true figure is somewhat lower than this.</span>':'')+'</div>';
+    H+='<div class="stack">';
+    layers.forEach(function(l){
+      if(l.v<=0)return;
+      H+='<div class="seg" style="width:'+(l.v/grand*100)+'%;background:'+l.c+'" title="'+l.k+' '+inr(l.v)+'"></div>';
+    });
+    H+='</div><div class="stack-key">';
+    layers.forEach(function(l){
+      if(l.v<=0)return;
+      H+='<div class="key"><span class="dot" style="background:'+l.c+'"></span>'+
+         '<b>'+l.k+'</b> <span>'+inr2(l.v/P.kg)+'/kg · '+Math.round(l.v/grand*100)+'%</span></div>';
+    });
+    H+='</div><div class="ledger">';
+    layers.forEach(function(l){
+      H+='<div class="lrow"><span class="lbl">'+l.k+'</span><span class="val num">'+inr(l.v)+
+         '<span class="pct">'+inr2(P.kg>0?l.v/P.kg:0)+'/kg</span></span></div>';
+    });
+    H+='<div class="lrow total"><span class="lbl">Total cost per kg</span>'+
+       '<span class="val num">'+inr2(perKg)+'</span></div></div>';
+  } else {
+    H+='<div class="empty">Not enough recorded yet to compute a cost per kg.<br><br>'+
+       'It needs two things in the same period: <b>production</b> from the Loading app, and '+
+       '<b>consumption or overheads</b> from TradeTrack. The checklist below shows what is missing.</div>';
+  }
+  H+='</div>';
+
+  H+='<div class="grid">';
+
+  // ── production ──
+  H+='<div class="card"><h3>Production</h3>';
+  if(P.entries>0){
+    H+='<div class="big num">'+kg(P.kg)+'</div><div class="big-sub">'+
+       P.units.toLocaleString('en-IN')+' units across '+P.entries+' entr'+(P.entries===1?'y':'ies')+'</div>';
+    H+='<div class="bar"><i style="width:'+Math.round(P.coverage*100)+'%"></i></div>';
+    H+='<div class="big-sub">Weight mapping '+Math.round(P.coverage*100)+'% complete'+
+       (P.unmapped>0?' · '+Math.round(P.unmapped).toLocaleString('en-IN')+' units have no weight':'')+'</div>';
+    var miss=Object.keys(P.missing).sort(function(a,b){return P.missing[b]-P.missing[a];}).slice(0,5);
+    if(miss.length){
+      H+='<div style="margin-top:12px;"><table><tr><th>Unweighted SKU</th><th class="r">Units</th></tr>';
+      miss.forEach(function(n){H+='<tr><td>'+n+'</td><td class="r num">'+Math.round(P.missing[n])+'</td></tr>';});
+      H+='</table></div>';
+    }
+  } else {
+    H+='<div class="empty">No production entries in this period.<br>They come from the Loading app under Stock → Production.</div>';
+  }
+  H+='</div>';
+
+  // ── overheads ──
+  H+='<div class="card"><h3>Overheads</h3>';
+  var ohTot=O.labour+O.other;
+  if(ohTot>0){
+    H+='<div class="big num">'+inr(ohTot)+'</div><div class="big-sub">apportioned to this period'+
+       (P.kg>0?' · '+inr2(ohTot/P.kg)+'/kg':'')+'</div><div style="margin-top:12px;">';
+    Object.keys(O.byTop).sort(function(a,b){return O.byTop[b]-O.byTop[a];}).forEach(function(k){
+      H+='<div class="stat"><span class="k">'+k+'</span><span class="v num">'+inr(O.byTop[k])+'</span></div>';
+    });
+    H+='</div>';
+  } else {
+    H+='<div class="empty">No approved overheads touching this period.<br><br>'+
+       'Record them in TradeTrack under <b>Overheads</b> — daily costs, period costs like electricity and rent, and daily wages.</div>';
+  }
+  if(O.pending>0){
+    H+='<div style="margin-top:12px;padding:9px 11px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);'+
+       'border-radius:7px;font-size:12px;" class="warn">'+O.pending+' entr'+(O.pending===1?'y':'ies')+
+       ' worth '+inr(O.pendingVal)+' still awaiting approval — not counted above.</div>';
+  }
+  H+='</div>';
+
+  // ── consumption ──
+  H+='<div class="card"><h3>Material consumed</h3>';
+  var conTot=C.material+C.packaging+C.fuel;
+  if(conTot>0){
+    H+='<div class="big num">'+inr(conTot)+'</div>'+
+       '<div class="big-sub">valued at weighted-average landed rate</div><div style="margin-top:12px;">';
+    Object.keys(C.byCat).sort(function(a,b){return C.byCat[b]-C.byCat[a];}).forEach(function(k){
+      H+='<div class="stat"><span class="k">'+k+'</span><span class="v num">'+inr(C.byCat[k])+'</span></div>';
+    });
+    H+='</div>';
+    if(C.unpriced>0){
+      H+='<div class="big-sub warn" style="margin-top:10px;">'+C.unpriced+
+         ' issue(s) skipped — those SKUs have no delivery on record, so there is no rate to value them at.</div>';
+    }
+  } else {
+    H+='<div class="empty">Nothing issued to production in this period, or no purchase history to value it against.</div>';
+  }
+  H+='</div>';
+
+  // ── labour ──
+  H+='<div class="card"><h3>Labour</h3>';
+  if(labour>0){
+    H+='<div class="big num">'+inr(labour)+'</div><div class="big-sub">'+
+       (P.kg>0?inr2(labour/P.kg)+'/kg':'&nbsp;')+'</div><div style="margin-top:12px;">'+
+       '<div class="stat"><span class="k">Daily wages</span><span class="v num">'+inr(O.labour)+'</span></div>'+
+       '<div class="stat"><span class="k">Contractor settlements</span><span class="v num">'+inr(K.amount)+
+       (K.count?' <span class="pct">'+K.count+'</span>':'')+'</span></div></div>';
+  } else {
+    H+='<div class="empty">No labour cost recorded for this period.<br><br>'+
+       'Daily wages go in TradeTrack under <b>Overheads → Daily Wages</b>. Contractor settlements are '+
+       'recorded in the Loading app under <b>Contractor Report</b>.</div>';
+  }
+  H+='</div>';
+
+  // ── freight memo ──
+  H+='<div class="card"><h3>Inward freight</h3>';
+  if(F.paid>0||F.inRate>0){
+    H+='<div class="big num">'+inr(F.paid)+'</div><div class="big-sub">paid separately on deliveries in this period</div>';
+    if(F.inRate>0) H+='<div class="stat" style="margin-top:10px;"><span class="k">Recorded but inside rate</span>'+
+      '<span class="v num">'+inr(F.inRate)+'</span></div>';
+    H+='<div class="big-sub" style="margin-top:10px;">Already inside the material figures above — shown here for '+
+       'visibility, not added again.</div>';
+  } else {
+    H+='<div class="empty">No freight recorded on deliveries in this period.</div>';
+  }
+  H+='</div>';
+
+  // ── what the numbers still need ──
+  H+='<div class="card"><h3>What these numbers still need</h3>';
+  var t=[];
+  t.push([P.entries>0,'Production entries recorded in the Loading app']);
+  t.push([P.coverage>0.999,'Every produced SKU has a fill weight'+(P.coverage<0.999?' — '+Math.round(P.coverage*100)+'% so far':'')]);
+  t.push([D.issues.length>0,'Material issued to production recorded in TradeTrack']);
+  t.push([Object.keys(landedRates()).length>0,'Purchase history to value that consumption']);
+  t.push([O.other>0,'Overheads recorded — electricity, rent, consumables']);
+  t.push([O.labour>0,'Daily wages recorded']);
+  t.push([K.count>0,'Contractor settlements recorded in the Loading app']);
+  t.push([C.fuel>0,'Fuel consumption from a stock-take']);
+  t.push([O.pending===0,'All overhead entries approved'+(O.pending?' — '+O.pending+' pending':'')]);
+  t.forEach(function(x){
+    H+='<div class="todo"><span class="mk '+(x[0]?'ok':'warn')+'">'+(x[0]?'✓':'○')+'</span><span>'+x[1]+'</span></div>';
+  });
+  H+='</div>';
+
+  H+='</div>';  // /grid
+
+  H+='<div class="foot">'+
+     'Reads TradeTrack and the Loading app directly. Nothing is written back.<br>'+
+     'This is a <b>direct cost</b> figure — material, packaging, fuel, labour and recorded overheads. '+
+     'It is not a statutory full cost, and it excludes loan principal by design.<br>'+
+     'The passcode is stored in this file, so treat the URL as private. Worth replacing with a proper login once it settles.'+
+     '</div>';
+
+  document.getElementById('body').innerHTML=H;
+}
+</script>
+</body>
+</html>

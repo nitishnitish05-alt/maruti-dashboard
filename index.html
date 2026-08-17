@@ -454,6 +454,17 @@ function computeFreight(){
 }
 
 // ═══════════════ RENDER ═══════════════
+// Remember that a flagged category has been checked, so it stops reappearing.
+// Any genuinely new category still raises the question.
+function dismissDupe(){
+  try{
+    var okd=JSON.parse(localStorage.getItem('mcd_dupe_ok')||'[]');
+    (window._dupeNames||[]).forEach(function(n){ if(okd.indexOf(n)<0) okd.push(n); });
+    localStorage.setItem('mcd_dupe_ok',JSON.stringify(okd));
+  }catch(e){}
+  render();
+}
+
 function render(){
   var P=computeProduction(), C=computeConsumption(), O=computeOverheads(),
       K=computeLabourAccrual(), S=computeSettlements(), F=computeFreight();
@@ -632,19 +643,27 @@ function render(){
   });
   H+='</div>';
 
-  // Overhead categories whose name suggests they duplicate the labour now accrued from Loading
+  // Overhead categories whose NAME suggests they might duplicate the labour now accrued
+  // from Loading. Name-matching can only raise the question, not answer it — a category
+  // called "Labour Contractor Payments" may well be unrelated casual labour. So each one
+  // can be marked as checked and stays quiet from then on.
+  var okd=[];
+  try{ okd=JSON.parse(localStorage.getItem('mcd_dupe_ok')||'[]'); }catch(e){}
   var dupe=Object.keys(O.byTop).filter(function(k){
-    return /contractor|karigar|packing labour|production labour/i.test(k);
+    return /contractor|karigar|packing labour|production labour/i.test(k) && okd.indexOf(k)<0;
   });
   if(dupe.length && K.total>0){
     var dv=dupe.reduce(function(s,k){return s+O.byTop[k];},0);
+    window._dupeNames=dupe.slice();
     H+='<div class="card" style="border-color:var(--amber);">'+
       '<h3 style="color:var(--amber);">⚠ Possible double count</h3>'+
       '<div class="empty">Packing and karigar labour is now <b>accrued from production</b> in the Loading app '+
       '('+inr(K.total)+' this period).<br><br>TradeTrack also has '+inr(dv)+' under <b>'+dupe.join(', ')+'</b>, '+
       'which is counted again in the overhead layer.<br><br>If that category is the same contractor labour, '+
       'stop recording it as a TradeTrack overhead — otherwise this cost is in the stack twice. '+
-      'If it is something else (supplementary helpers, for instance), it is fine as it is.</div></div>';
+      'If it is something else (casual labour for odd jobs, for instance), it is fine as it is.'+
+      '<div style="margin-top:12px;"><button class="btn" onclick="dismissDupe()">Checked — not a duplicate</button></div>'+
+      '</div></div>';
   }
 
   H+='</div>';  // /grid
